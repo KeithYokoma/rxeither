@@ -4,10 +4,11 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import net.jokubasdargis.rxeither.Either;
 import net.jokubasdargis.rxeither.RxEither;
-import rx.Observable;
-import rx.functions.Action1;
-import rx.schedulers.Schedulers;
-import rx.subjects.PublishSubject;
+
+import io.reactivex.Observable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subjects.PublishSubject;
 
 public class ProgressExample {
 
@@ -26,18 +27,14 @@ public class ProgressExample {
 
         Observable<Either<Integer, String>> either = RxEither.from(progress, results).share();
 
-        RxEither.filterLeft(either).subscribe(new Action1<Integer>() {
+        RxEither.filterLeft(either).subscribe(new Consumer<Integer>() {
             @Override
-            public void call(Integer integer) {
+            public void accept(Integer integer) throws Exception {
                 System.out.println("Progress: " + integer);
             }
         });
-        RxEither.filterRight(either).toBlocking().subscribe(new Action1<String>() {
-            @Override
-            public void call(String s) {
-                System.out.println("Results: " + s);
-            }
-        });
+        String result = RxEither.filterRight(either).blockingSingle();
+        System.out.println("Results: " + result);
     }
 
     private ProgressExample() {

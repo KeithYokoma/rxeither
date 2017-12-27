@@ -4,7 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import net.jokubasdargis.rxeither.Either;
-import rx.functions.Action1;
+import io.reactivex.functions.Consumer;
 
 public class SwitchActionExample {
 
@@ -20,14 +20,14 @@ public class SwitchActionExample {
             either = Either.left(in);
         }
 
-        either.continued(new Action1<String>() {
+        either.continued(new Consumer<String>() {
             @Override
-            public void call(String s) {
+            public void accept(String s) {
                 System.out.println("You passed me the String: " + s);
             }
-        }, new Action1<Integer>() {
+        }, new Consumer<Integer>() {
             @Override
-            public void call(Integer x) {
+            public void accept(Integer x) {
                 System.out.println(
                         "You passed me the Int: " + x
                                 + ", which I will increment. " + x + " + 1 = "

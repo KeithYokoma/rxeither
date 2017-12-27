@@ -1,7 +1,7 @@
 package net.jokubasdargis.rxeither;
 
-import rx.functions.Action1;
-import rx.functions.Func1;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
 
 final class Left<L, R> extends Either<L, R> {
 
@@ -22,25 +22,21 @@ final class Left<L, R> extends Either<L, R> {
     }
 
     @Override
-    public void continued(Action1<L> left, Action1<R> right) {
-        left.call(value);
+    public void continued(Consumer<L> left, Consumer<R> right) {
+        try {
+            left.accept(value);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
-    public <R1> R1 join(Func1<L, R1> left, Func1<R, R1> right) {
-        return left.call(value);
-    }
-
-    @Deprecated
-    @Override
-    public void fold(Action1<L> left, Action1<R> right) {
-        continued(left, right);
-    }
-
-    @Deprecated
-    @Override
-    public <T> T fold(Func1<L, T> left, Func1<R, T> right) {
-        return join(left, right);
+    public <R1> R1 join(Function<L, R1> left, Function<R, R1> right) {
+        try {
+            return left.apply(value);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

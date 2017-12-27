@@ -1,14 +1,17 @@
 package net.jokubasdargis.rxeither;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import rx.Observable;
-import rx.Observer;
-import rx.Subscriber;
-import rx.Subscription;
-import rx.functions.Action0;
-import rx.subscriptions.Subscriptions;
 
-final class EitherOnSubscribe<L, R> implements Observable.OnSubscribe<Either<L, R>> {
+import io.reactivex.Observable;
+import io.reactivex.ObservableEmitter;
+import io.reactivex.ObservableOnSubscribe;
+import io.reactivex.Observer;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.disposables.Disposables;
+import io.reactivex.functions.Action;
+
+final class EitherOnSubscribe<L, R> implements ObservableOnSubscribe<Either<L, R>> {
 
     private final Observable<L> left;
     private final Observable<R> right;
@@ -19,72 +22,69 @@ final class EitherOnSubscribe<L, R> implements Observable.OnSubscribe<Either<L, 
     }
 
     @Override
-    public void call(final Subscriber<? super Either<L, R>> subscriber) {
+    public void subscribe(final ObservableEmitter<Either<L, R>> emitter) throws Exception {
         final AtomicBoolean done = new AtomicBoolean();
+        final CompositeDisposable disposable = new CompositeDisposable();
 
-        final Subscription leftSubscription = left.subscribe(new Observer<L>() {
+        left.subscribe(new Observer<L>() {
             @Override
-            public void onCompleted() {
-                if (done.compareAndSet(false, true)) {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onCompleted();
-                    }
-                }
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                if (done.compareAndSet(false, true)) {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onError(e);
-                    }
-                }
+            public void onSubscribe(Disposable d) {
+                disposable.add(d);
             }
 
             @Override
             public void onNext(L l) {
                 if (!done.get()) {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onNext(Either.<L, R>left(l));
-                    }
-                }
-            }
-        });
-
-        final Subscription rightSubscription = right.subscribe(new Observer<R>() {
-            @Override
-            public void onCompleted() {
-                if (done.compareAndSet(false, true)) {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onCompleted();
-                    }
+                    emitter.onNext(Either.<L, R>left(l));
                 }
             }
 
             @Override
             public void onError(Throwable e) {
                 if (done.compareAndSet(false, true)) {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onError(e);
-                    }
+                    emitter.tryOnError(e);
+                }
+            }
+
+            @Override
+            public void onComplete() {
+                if (done.compareAndSet(false, true)) {
+                    emitter.onComplete();
+                }
+            }
+        });
+
+        right.subscribe(new Observer<R>() {
+            @Override
+            public void onSubscribe(Disposable d) {
+                disposable.add(d);
+            }
+
+            @Override
+            public void onComplete() {
+                if (done.compareAndSet(false, true)) {
+                    emitter.onComplete();
+                }
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                if (done.compareAndSet(false, true)) {
+                    emitter.tryOnError(e);
                 }
             }
 
             @Override
             public void onNext(R r) {
                 if (!done.get()) {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onNext(Either.<L, R>right(r));
-                    }
+                    emitter.onNext(Either.<L, R>right(r));
                 }
             }
         });
-
-        subscriber.add(Subscriptions.create(new Action0() {
+        emitter.setDisposable(Disposables.fromAction(new Action() {
             @Override
-            public void call() {
-                leftSubscription.unsubscribe();
-                rightSubscription.unsubscribe();
+            public void run() throws Exception {
+                disposable.dispose();
             }
         }));
     }

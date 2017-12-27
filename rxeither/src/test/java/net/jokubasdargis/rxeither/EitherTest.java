@@ -6,102 +6,59 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import org.junit.Test;
-import rx.functions.Action1;
-import rx.functions.Func1;
+
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
 
 @SuppressWarnings("unchecked")
 public final class EitherTest {
 
     private final EventA eventA = new EventA();
     private final EventB eventB = new EventB();
-    private final Func1<EventA, EventA> funcAA = mock(Func1.class);
-    private final Func1<EventB, EventA> funcBA = mock(Func1.class);
-    private final Func1<EventA, EventB> funcAB = mock(Func1.class);
-    private final Func1<EventB, EventB> funcBB = mock(Func1.class);
-    private final Action1<EventA> actionA = mock(Action1.class);
-    private final Action1<EventB> actionB = mock(Action1.class);
+    private final Function<EventA, EventA> funcAA = mock(Function.class);
+    private final Function<EventB, EventA> funcBA = mock(Function.class);
+    private final Function<EventA, EventB> funcAB = mock(Function.class);
+    private final Function<EventB, EventB> funcBB = mock(Function.class);
+    private final Consumer<EventA> actionA = mock(Consumer.class);
+    private final Consumer<EventB> actionB = mock(Consumer.class);
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void foldLeftFunc() {
-        Either<EventA, EventB> left = Either.left(eventA);
-
-        left.fold(funcAA, funcBA);
-
-        verify(funcAA).call(eventA);
-        verifyNoMoreInteractions(funcBA);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void foldLeftAction() {
-        Either<EventA, EventB> left = Either.left(eventA);
-
-        left.fold(actionA, actionB);
-
-        verify(actionA).call(eventA);
-        verifyNoMoreInteractions(actionB);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void foldRightFunc() {
-        Either<EventA, EventB> right = Either.right(eventB);
-
-        right.fold(funcAB, funcBB);
-
-        verify(funcBB).call(eventB);
-        verifyNoMoreInteractions(funcAB);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void foldRightAction() {
-        Either<EventA, EventB> right = Either.right(eventB);
-
-        right.fold(actionA, actionB);
-
-        verify(actionB).call(eventB);
-        verifyNoMoreInteractions(actionA);
-    }
-
-    @Test
-    public void joinLeft() {
+    public void joinLeft() throws Exception {
         Either<EventA, EventB> left = Either.left(eventA);
 
         left.join(funcAA, funcBA);
 
-        verify(funcAA).call(eventA);
+        verify(funcAA).apply(eventA);
         verifyNoMoreInteractions(funcBA);
     }
 
     @Test
-    public void continuedLeft() {
+    public void continuedLeft() throws Exception {
         Either<EventA, EventB> left = Either.left(eventA);
 
         left.continued(actionA, actionB);
 
-        verify(actionA).call(eventA);
+        verify(actionA).accept(eventA);
         verifyNoMoreInteractions(actionB);
     }
 
     @Test
-    public void joinRight() {
+    public void joinRight() throws Exception {
         Either<EventA, EventB> right = Either.right(eventB);
 
         right.join(funcAB, funcBB);
 
-        verify(funcBB).call(eventB);
+        verify(funcBB).apply(eventB);
         verifyNoMoreInteractions(funcAB);
     }
 
     @Test
-    public void continuedRight() {
+    public void continuedRight() throws Exception {
         Either<EventA, EventB> right = Either.right(eventB);
 
         right.continued(actionA, actionB);
 
-        verify(actionB).call(eventB);
+        verify(actionB).accept(eventB);
         verifyNoMoreInteractions(actionA);
     }
 

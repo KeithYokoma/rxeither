@@ -6,22 +6,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.junit.Test;
-import rx.Observable;
-import rx.functions.Action1;
-import rx.functions.Func1;
-import rx.observers.TestSubscriber;
-import rx.schedulers.Schedulers;
-import rx.schedulers.TestScheduler;
-import rx.subjects.TestSubject;
+
+import io.reactivex.Observable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.observers.TestObserver;
+import io.reactivex.schedulers.TestScheduler;
+import io.reactivex.subjects.PublishSubject;
+import io.reactivex.subjects.Subject;
 
 public final class RxEitherTest {
 
     private final EventA eventA = new EventA();
     private final EventB eventB = new EventB();
-    private final TestScheduler testScheduler = Schedulers.test();
-    private final TestSubscriber<Either<EventA, EventB>> subscriber = new TestSubscriber<>();
-    private final TestSubject<EventA> eventASubject = TestSubject.create(testScheduler);
-    private final TestSubject<EventB> eventBSubject = TestSubject.create(testScheduler);
+    private final TestObserver<Either<EventA, EventB>> subscriber = TestObserver.create();
+    private final TestScheduler testScheduler = new TestScheduler();
+    private final Subject<EventA> eventASubject = PublishSubject.create();
+    private final Subject<EventB> eventBSubject = PublishSubject.create();
 
     @Test
     public void singleLeft() {
@@ -33,7 +34,7 @@ public final class RxEitherTest {
         testScheduler.triggerActions();
 
         subscriber.assertNoErrors();
-        subscriber.assertNotCompleted();
+        subscriber.assertNotComplete();
         subscriber.assertValue(Either.<EventA, EventB>left(eventA));
     }
 
@@ -44,77 +45,9 @@ public final class RxEitherTest {
 
         eventBSubject.onNext(eventB);
 
-        testScheduler.triggerActions();
-
         subscriber.assertNoErrors();
-        subscriber.assertNotCompleted();
+        subscriber.assertNotComplete();
         subscriber.assertValue(Either.<EventA, EventB>right(eventB));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void multipleLeftRight() {
-        Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
-        either.subscribe(subscriber);
-
-        eventASubject.onNext(eventA);
-        eventBSubject.onNext(eventB);
-        eventBSubject.onNext(eventB);
-        eventASubject.onNext(eventA);
-
-        testScheduler.triggerActions();
-
-        subscriber.assertNoErrors();
-        subscriber.assertNotCompleted();
-        subscriber.assertValues(Either.<EventA, EventB>left(eventA),
-                                Either.<EventA, EventB>right(eventB),
-                                Either.<EventA, EventB>right(eventB),
-                                Either.<EventA, EventB>left(eventA));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void singleLeftTerminalRight() {
-        Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
-        either.subscribe(subscriber);
-
-        eventASubject.onNext(eventA);
-        eventBSubject.onNext(eventB);
-        eventBSubject.onCompleted();
-        eventASubject.onNext(eventA);
-
-        testScheduler.triggerActions();
-
-        subscriber.assertNoErrors();
-        subscriber.assertCompleted();
-        subscriber.assertUnsubscribed();
-        subscriber.assertValues(Either.<EventA, EventB>left(eventA),
-                                Either.<EventA, EventB>right(eventB));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void multipleLeftTerminalRightOtherThread() {
-        TestScheduler otherScheduler = Schedulers.test();
-        TestSubject<EventB> eventBSubject = TestSubject.create(otherScheduler);
-        Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
-        either.subscribe(subscriber);
-
-        eventASubject.onNext(eventA);
-        eventBSubject.onNext(eventB);
-        eventBSubject.onCompleted();
-        eventASubject.onNext(eventA);
-
-        testScheduler.triggerActions();
-        subscriber.assertNotCompleted();
-        otherScheduler.triggerActions();
-
-        subscriber.assertNoErrors();
-        subscriber.assertCompleted();
-        subscriber.assertUnsubscribed();
-        subscriber.assertValues(Either.<EventA, EventB>left(eventA),
-                                Either.<EventA, EventB>left(eventA),
-                                Either.<EventA, EventB>right(eventB));
     }
 
     @Test
@@ -126,68 +59,46 @@ public final class RxEitherTest {
         eventASubject.onError(error);
         eventBSubject.onNext(eventB);
 
-        testScheduler.triggerActions();
-
         subscriber.assertError(error);
-        subscriber.assertNotCompleted();
-        subscriber.assertUnsubscribed();
+        subscriber.assertNotComplete();
+        subscriber.assertTerminated();
         subscriber.assertNoValues();
     }
 
     @Test
     public void filterLeft() {
-        TestSubscriber<EventA> subscriber = new TestSubscriber<>();
+        TestObserver<EventA> subscriber = TestObserver.create();
         Observable<EventA> left = RxEither.filterLeft(RxEither.from(eventASubject, eventBSubject));
         left.subscribe(subscriber);
 
         eventASubject.onNext(eventA);
         eventBSubject.onNext(eventB);
-        testScheduler.triggerActions();
 
         subscriber.assertNoErrors();
-        subscriber.assertNotCompleted();
+        subscriber.assertNotComplete();
         subscriber.assertValue(eventA);
     }
 
     @Test
     public void filterRight() {
-        TestSubscriber<EventB> subscriber = new TestSubscriber<>();
+        TestObserver<EventB> subscriber = TestObserver.create();
         Observable<EventB> right =
                 RxEither.filterRight(RxEither.from(eventASubject, eventBSubject));
         right.subscribe(subscriber);
 
         eventASubject.onNext(eventA);
         eventBSubject.onNext(eventB);
-        testScheduler.triggerActions();
 
         subscriber.assertNoErrors();
-        subscriber.assertNotCompleted();
+        subscriber.assertNotComplete();
         subscriber.assertValue(eventB);
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void foldLazyAction() {
-        Action1<EventA> eventAAction = mock(Action1.class);
-        Action1<EventB> eventBAction = mock(Action1.class);
-
-        Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
-
-        either.subscribe(RxEither.foldLazy(eventAAction, eventBAction));
-
-        eventASubject.onNext(eventA);
-        eventBSubject.onNext(eventB);
-        testScheduler.triggerActions();
-
-        verify(eventAAction).call(eventA);
-        verify(eventBAction).call(eventB);
-    }
-
-    @Test
     @SuppressWarnings("unchecked")
-    public void continuedLazy() {
-        Action1<EventA> eventAAction = mock(Action1.class);
-        Action1<EventB> eventBAction = mock(Action1.class);
+    public void continuedLazy() throws Exception {
+        Consumer<EventA> eventAAction = mock(Consumer.class);
+        Consumer<EventB> eventBAction = mock(Consumer.class);
 
         Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
 
@@ -197,40 +108,19 @@ public final class RxEitherTest {
         eventBSubject.onNext(eventB);
         testScheduler.triggerActions();
 
-        verify(eventAAction).call(eventA);
-        verify(eventBAction).call(eventB);
-    }
-
-    @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void foldLazyFunc() {
-        Action1<EventA> eventAAction = mock(Action1.class);
-        Func1<EventA, EventA> eventAEventAFunc = mock(Func1.class);
-        Func1<EventB, EventA> eventBEventAFunc = mock(Func1.class);
-
-        when(eventAEventAFunc.call(eventA)).thenReturn(eventA);
-        when(eventBEventAFunc.call(eventB)).thenReturn(eventA);
-
-        Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
-
-        either.map(RxEither.foldLazy(eventAEventAFunc, eventBEventAFunc)).subscribe(eventAAction);
-
-        eventASubject.onNext(eventA);
-        eventBSubject.onNext(eventB);
-        testScheduler.triggerActions();
-
-        verify(eventAAction, times(2)).call(eventA);
+        verify(eventAAction).accept(eventA);
+        verify(eventBAction).accept(eventB);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void joinLazy() {
-        Action1<EventA> eventAAction = mock(Action1.class);
-        Func1<EventA, EventA> eventAEventAFunc = mock(Func1.class);
-        Func1<EventB, EventA> eventBEventAFunc = mock(Func1.class);
+    public void joinLazy() throws Exception {
+        Consumer<EventA> eventAAction = mock(Consumer.class);
+        Function<EventA, EventA> eventAEventAFunc = mock(Function.class);
+        Function<EventB, EventA> eventBEventAFunc = mock(Function.class);
 
-        when(eventAEventAFunc.call(eventA)).thenReturn(eventA);
-        when(eventBEventAFunc.call(eventB)).thenReturn(eventA);
+        when(eventAEventAFunc.apply(eventA)).thenReturn(eventA);
+        when(eventBEventAFunc.apply(eventB)).thenReturn(eventA);
 
         Observable<Either<EventA, EventB>> either = RxEither.from(eventASubject, eventBSubject);
 
@@ -240,6 +130,6 @@ public final class RxEitherTest {
         eventBSubject.onNext(eventB);
         testScheduler.triggerActions();
 
-        verify(eventAAction, times(2)).call(eventA);
+        verify(eventAAction, times(2)).accept(eventA);
     }
 }

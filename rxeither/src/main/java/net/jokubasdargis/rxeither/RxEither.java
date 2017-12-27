@@ -1,8 +1,9 @@
 package net.jokubasdargis.rxeither;
 
-import rx.Observable;
-import rx.functions.Action1;
-import rx.functions.Func1;
+import io.reactivex.Observable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 
 /**
  * Helper to create and filter {@link Observable}s of {@link Either} type.
@@ -33,14 +34,14 @@ public final class RxEither {
     /**
      * Checks whether {@link Either} is left.
      */
-    public static <L, R> Func1<Either<L, R>, Boolean> isLeft() {
+    public static <L, R> Predicate<Either<L, R>> isLeft() {
         return IsLeft.instance();
     }
 
     /**
      * Checks whether {@link Either} is right.
      */
-    public static <L, R> Func1<Either<L, R>, Boolean> isRight() {
+    public static <L, R> Predicate<Either<L, R>> isRight() {
         return IsRight.instance();
     }
 
@@ -59,124 +60,97 @@ public final class RxEither {
     }
 
     /**
-     * @deprecated - use {@link #continuedLazy(Action1, Action1)} instead.
-     * <p>
-     * Creates an {@link Action1} to lazily invoke the provided fold {@link Action1}s.
+     * Creates an {@link Consumer} to lazily invoke the provided fold {@link Consumer}s.
      */
-    @Deprecated
-    public static <L, R> Action1<Either<L, R>> foldLazy(Action1<L> left, Action1<R> right) {
-        return continuedLazy(left, right);
-    }
-
-    /**
-     * @deprecated - use {@link #joinLazy(Func1, Func1)} instead.
-     * <p>
-     * Creates a {@link Func1} to lazily get a fold result from the provided {@link Func1}s.
-     */
-    @Deprecated
-    public static <L, R, T> Func1<Either<L, R>, T> foldLazy(Func1<L, T> left, Func1<R, T> right) {
-        return joinLazy(left, right);
-    }
-
-    /**
-     * Creates an {@link Action1} to lazily invoke the provided fold {@link Action1}s.
-     */
-    public static <L, R> Action1<Either<L, R>> continuedLazy(Action1<L> left, Action1<R> right) {
+    public static <L, R> Consumer<Either<L, R>> continuedLazy(Consumer<L> left, Consumer<R> right) {
         return ContinuedLazy.create(left, right);
     }
 
     /**
-     * Creates a {@link Func1} to lazily get a fold result from the provided {@link Func1}s.
+     * Creates a {@link Function} to lazily get a fold result from the provided {@link Function}s.
      */
-    public static <L, R, T> Func1<Either<L, R>, T> joinLazy(Func1<L, T> left, Func1<R, T> right) {
+    public static <L, R, T> Function<Either<L, R>, T> joinLazy(Function<L, T> left, Function<R, T> right) {
         return JoinLazy.create(left, right);
     }
 
-    private static class ContinuedLazy<L, R> implements Action1<Either<L, R>> {
+    private static class ContinuedLazy<L, R> implements Consumer<Either<L, R>> {
+        private final Consumer<L> left;
+        private final Consumer<R> right;
 
-        private final Action1<L> left;
-        private final Action1<R> right;
-
-        static <L, R> Action1<Either<L, R>> create(Action1<L> left, Action1<R> right) {
+        static <L, R> Consumer<Either<L, R>> create(Consumer<L> left, Consumer<R> right) {
             return new ContinuedLazy<>(left, right);
         }
 
-        @Override
-        public void call(Either<L, R> lrEither) {
-            lrEither.continued(left, right);
-        }
-
-        private ContinuedLazy(Action1<L> left, Action1<R> right) {
+        private ContinuedLazy(Consumer<L> left, Consumer<R> right) {
             this.left = left;
             this.right = right;
         }
+
+        @Override
+        public void accept(Either<L, R> lrEither) throws Exception {
+            lrEither.continued(left, right);
+        }
     }
 
-    private static class JoinLazy<L, R, T> implements Func1<Either<L, R>, T> {
+    private static class JoinLazy<L, R, T> implements Function<Either<L, R>, T> {
+        private final Function<L, T> left;
+        private final Function<R, T> right;
 
-        private final Func1<L, T> left;
-        private final Func1<R, T> right;
-
-        public static <L, R, T> Func1<Either<L, R>, T> create(Func1<L, T> left, Func1<R, T> right) {
+        public static <L, R, T> Function<Either<L, R>, T> create(Function<L, T> left, Function<R, T> right) {
             return new JoinLazy<>(left, right);
         }
 
-        @Override
-        public T call(Either<L, R> lrEither) {
-            return lrEither.join(left, right);
-        }
-
-        private JoinLazy(Func1<L, T> left, Func1<R, T> right) {
+        private JoinLazy(Function<L, T> left, Function<R, T> right) {
             this.left = left;
             this.right = right;
         }
+
+        @Override
+        public T apply(Either<L, R> lrEither) {
+            return lrEither.join(left, right);
+        }
     }
 
-    private static class JoinLeft<L, R> implements Func1<Either<L, R>, L> {
-
+    private static class JoinLeft<L, R> implements Function<Either<L, R>, L> {
         @SuppressWarnings("unchecked")
         static <L, R> JoinLeft<L, R> instance() {
             return (JoinLeft<L, R>) Holder.INSTANCE;
         }
 
         @Override
-        public L call(Either<L, R> lrEither) {
+        public L apply(Either<L, R> lrEither) throws Exception {
             return lrEither.join(Identity.<L>instance(), Nothing.<R, L>instance());
         }
 
         private static class Holder {
-
             static final JoinLeft<?, ?> INSTANCE = new JoinLeft<>();
         }
     }
 
-    private static class JoinRight<L, R> implements Func1<Either<L, R>, R> {
-
+    private static class JoinRight<L, R> implements Function<Either<L, R>, R> {
         @SuppressWarnings("unchecked")
         static <L, R> JoinRight<L, R> instance() {
             return (JoinRight<L, R>) Holder.INSTANCE;
         }
 
         @Override
-        public R call(Either<L, R> lrEither) {
+        public R apply(Either<L, R> lrEither) throws Exception {
             return lrEither.join(Nothing.<L, R>instance(), Identity.<R>instance());
         }
 
         private static class Holder {
-
             static final JoinRight<?, ?> INSTANCE = new JoinRight<>();
         }
     }
 
-    private static class IsLeft<L, R> implements Func1<Either<L, R>, Boolean> {
-
+    private static class IsLeft<L, R> implements Predicate<Either<L, R>> {
         @SuppressWarnings("unchecked")
         static <L, R> IsLeft<L, R> instance() {
             return (IsLeft<L, R>) Holder.INSTANCE;
         }
 
         @Override
-        public Boolean call(Either<L, R> lrEither) {
+        public boolean test(Either<L, R> lrEither) {
             return lrEither.isLeft();
         }
 
@@ -186,15 +160,14 @@ public final class RxEither {
         }
     }
 
-    private static class IsRight<L, R> implements Func1<Either<L, R>, Boolean> {
-
+    private static class IsRight<L, R> implements Predicate<Either<L, R>> {
         @SuppressWarnings("unchecked")
         static <L, R> IsRight<L, R> instance() {
             return (IsRight<L, R>) Holder.INSTANCE;
         }
 
         @Override
-        public Boolean call(Either<L, R> lrEither) {
+        public boolean test(Either<L, R> lrEither) {
             return lrEither.isRight();
         }
 
@@ -204,38 +177,34 @@ public final class RxEither {
         }
     }
 
-    private static class Nothing<T, R> implements Func1<T, R> {
-
+    private static class Nothing<T, R> implements Function<T, R> {
         @SuppressWarnings("unchecked")
         static <T, R> Nothing<T, R> instance() {
             return (Nothing<T, R>) Holder.INSTANCE;
         }
 
         @Override
-        public R call(T t) {
+        public R apply(T t) throws Exception {
             return null;
         }
 
         private static class Holder {
-
             static final Nothing<?, ?> INSTANCE = new Nothing<>();
         }
     }
 
-    private static class Identity<T> implements Func1<T, T> {
-
+    private static class Identity<T> implements Function<T, T> {
         @SuppressWarnings("unchecked")
         static <T> Identity<T> instance() {
             return (Identity<T>) Holder.INSTANCE;
         }
 
         @Override
-        public T call(T t) {
+        public T apply(T t) throws Exception {
             return t;
         }
 
         private static class Holder {
-
             static final Identity<?> INSTANCE = new Identity<>();
         }
     }
